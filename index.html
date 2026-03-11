@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>スケジュール表</title>
+  <link rel="stylesheet" href="style.css?v=8">
+</head>
+<body>
+  <header>
+    <h1>スケジュール表</h1>
+    <div class="view-toggle">
+      <button id="btn-weekly" class="active">週間</button>
+      <button id="btn-monthly">月間</button>
+      <button id="btn-theme" class="btn-theme" title="ダークモード切替">🌙</button>
+    </div>
+  </header>
+
+  <main>
+    <nav class="nav-bar">
+      <div class="nav-left">
+        <button id="btn-prev">&laquo; 前</button>
+        <span id="nav-label"></span>
+        <button id="btn-next">次 &raquo;</button>
+        <button id="btn-today">今日</button>
+      </div>
+      <button id="btn-add" class="btn-add">+ 予定追加</button>
+      <button id="btn-gcal-reload" class="btn-gcal-reload" title="Google カレンダーをリロード">&#x21bb; Google Reload</button>
+      <div class="nav-right"></div>
+    </nav>
+
+    <div class="legend" id="legend"></div>
+
+    <section id="weekly-view" class="view"></section>
+    <section id="monthly-view" class="view hidden"></section>
+  </main>
+
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal">
+      <button class="modal-close" id="modal-close">&times;</button>
+      <h2 id="modal-title"></h2>
+      <div id="modal-body"></div>
+      <div id="modal-actions" class="modal-actions hidden">
+        <button id="btn-edit" class="btn-action btn-edit">編集</button>
+        <button id="btn-delete" class="btn-action btn-delete">削除</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="edit-modal-overlay" class="modal-overlay hidden">
+    <div class="modal modal-edit">
+      <button class="modal-close" id="edit-modal-close">&times;</button>
+      <h2 id="edit-modal-title">予定を追加</h2>
+      <form id="edit-form">
+        <input type="hidden" id="edit-id">
+        <div class="form-group">
+          <label for="edit-title">タイトル <span class="required">*</span></label>
+          <input type="text" id="edit-title" required>
+        </div>
+        <div class="form-group">
+          <label for="edit-date">日付 <span class="required">*</span></label>
+          <input type="date" id="edit-date" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="edit-start">開始時間 <span class="required">*</span></label>
+            <input type="time" id="edit-start" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-end">終了時間 <span class="required">*</span></label>
+            <input type="time" id="edit-end" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="edit-category">カテゴリ <span class="required">*</span></label>
+          <select id="edit-category" required></select>
+        </div>
+        <div class="form-group">
+          <label for="edit-note">メモ</label>
+          <textarea id="edit-note" rows="3"></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="button" id="edit-cancel" class="btn-action btn-cancel">キャンセル</button>
+          <button type="submit" class="btn-action btn-save">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js?v=4"></script>
+</body>
+</html>

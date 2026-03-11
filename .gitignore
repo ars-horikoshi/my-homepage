@@ -1,0 +1,5 @@
+venv/
+client_secret.json
+token.json
+.code_verifier
+public/

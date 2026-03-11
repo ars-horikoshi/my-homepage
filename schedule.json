@@ -1,0 +1,40 @@
+{
+  "events": [
+    {
+      "id": 1,
+      "title": "レクター広木さんMTG",
+      "date": "2026-02-19",
+      "startTime": "10:00",
+      "endTime": "11:00",
+      "category": "work",
+      "note": ""
+    },
+    {
+      "id": 2,
+      "title": "昼休憩",
+      "date": "2026-03-09",
+      "startTime": "12:30",
+      "endTime": "13:30",
+      "category": "other",
+      "note": ""
+    }
+  ],
+  "categories": {
+    "work": {
+      "label": "仕事",
+      "color": "#4A90D9"
+    },
+    "personal": {
+      "label": "プライベート",
+      "color": "#7ED321"
+    },
+    "other": {
+      "label": "その他",
+      "color": "#F5A623"
+    },
+    "google": {
+      "label": "Google",
+      "color": "#E88080"
+    }
+  }
+}

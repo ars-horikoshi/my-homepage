@@ -1,0 +1,7 @@
+name = "my-homepage"
+compatibility_date = "2024-01-15"
+pages_build_output_dir = "public"
+
+[[kv_namespaces]]
+binding = "SCHEDULE_KV"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
