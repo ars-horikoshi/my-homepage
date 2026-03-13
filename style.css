@@ -306,6 +306,20 @@ header h1 {
   opacity: 0.85;
 }
 
+.current-time-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #000;
+  z-index: 2;
+  pointer-events: none;
+}
+
+[data-theme="dark"] .current-time-line {
+  background: #e0e0e0;
+}
+
 /* ========================================
    Monthly View
    ======================================== */
@@ -361,6 +375,14 @@ header h1 {
   font-size: 0.8rem;
   font-weight: bold;
   margin-bottom: 4px;
+}
+
+.month-cell .day-number.sun-num {
+  color: #e74c3c;
+}
+
+.month-cell .day-number.sat-num {
+  color: #3498db;
 }
 
 .month-cell.today .day-number {
@@ -460,6 +482,7 @@ header h1 {
   cursor: pointer;
   font-size: 0.85rem;
   font-weight: bold;
+  line-height: 1.4;
   transition: background 0.2s;
 }
 
@@ -482,6 +505,7 @@ header h1 {
   cursor: pointer;
   font-size: 0.85rem;
   font-weight: bold;
+  line-height: 1.4;
   transition: background 0.2s;
 }
 
@@ -656,6 +680,16 @@ header h1 {
 
 .gcal-event {
   opacity: 0.92;
+}
+
+.holiday-readonly-badge {
+  background: #fde8e8 !important;
+  color: #c0392b !important;
+}
+
+[data-theme="dark"] .holiday-readonly-badge {
+  background: #4a1a1a !important;
+  color: #f1948a !important;
 }
 
 @media (max-width: 768px) {

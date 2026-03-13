@@ -1,4 +1,4 @@
-function htmlError(msg) {
+export function htmlError(msg) {
   return new Response(`<html><body><p>${msg}</p><a href="/">トップへ戻る</a></body></html>`, {
     status: 400,
     headers: { "Content-Type": "text/html; charset=utf-8" },

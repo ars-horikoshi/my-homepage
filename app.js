@@ -1,3 +1,5 @@
+import { toDateStr, isToday, getMonday, computeDayLayout, calculateHolidaysForYear, getJapaneseHoliday } from './src/utils.js';
+
 (() => {
   "use strict";
 
@@ -46,72 +48,29 @@
   const START_HOUR = 0;
   const END_HOUR = 24;
 
-  function toDateStr(d) {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  }
-
-  function isToday(d) {
-    const t = new Date();
-    return d.getFullYear() === t.getFullYear() &&
-      d.getMonth() === t.getMonth() &&
-      d.getDate() === t.getDate();
-  }
-
-  function getMonday(d) {
-    const day = d.getDay();
-    const diff = (day === 0 ? -6 : 1) - day;
-    const monday = new Date(d);
-    monday.setDate(d.getDate() + diff);
-    return monday;
-  }
-
   function eventsForDate(dateStr) {
     const local = scheduleData.events.filter(e => e.date === dateStr);
     const gcal  = gcalEvents.filter(e => e.date === dateStr);
-    return [...local, ...gcal];
+    const holidayName = getJapaneseHoliday(dateStr);
+    const holidays = holidayName ? [{
+      id: `holiday-${dateStr}`,
+      title: holidayName,
+      date: dateStr,
+      startTime: "00:00",
+      endTime: "23:59",
+      category: "__holiday__",
+      source: "holiday",
+    }] : [];
+    return [...holidays, ...local, ...gcal];
   }
 
   function categoryColor(cat) {
+    if (cat === "__holiday__") return "#e74c3c";
     return (scheduleData.categories[cat] && scheduleData.categories[cat].color) || "#999";
   }
 
   function categoryLabel(cat) {
     return (scheduleData.categories[cat] && scheduleData.categories[cat].label) || cat;
-  }
-
-  // ---- Overlap Layout ----
-  function computeDayLayout(events) {
-    const result = new Map();
-    if (events.length === 0) return result;
-    const toMin = t => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
-    const sorted = [...events].sort((a, b) => toMin(a.startTime) - toMin(b.startTime));
-
-    const colEnds = []; // end time of last event per column
-    const info = new Map();
-    for (const ev of sorted) {
-      const startMin = toMin(ev.startTime);
-      const endMin = toMin(ev.endTime);
-      let col = 0;
-      while (col < colEnds.length && colEnds[col] > startMin) col++;
-      if (col === colEnds.length) colEnds.push(0);
-      colEnds[col] = endMin;
-      info.set(ev, { col, startMin, endMin });
-    }
-
-    for (const ev of sorted) {
-      const { col, startMin, endMin } = info.get(ev);
-      let maxCol = col;
-      for (const other of sorted) {
-        if (other === ev) continue;
-        const o = info.get(other);
-        if (o.startMin < endMin && o.endMin > startMin) maxCol = Math.max(maxCol, o.col);
-      }
-      result.set(ev, { col, totalCols: maxCol + 1 });
-    }
-    return result;
   }
 
   function nextId() {
@@ -188,17 +147,22 @@
     const color = categoryColor(ev.category);
     const readonlyBadge = ev.source === "gcal"
       ? `<div><span class="gcal-readonly-badge">Google カレンダー (読み取り専用)</span></div>`
+      : ev.source === "holiday"
+      ? `<div><span class="gcal-readonly-badge holiday-readonly-badge">日本の祝日</span></div>`
       : "";
+    const timeRow = ev.source === "holiday"
+      ? `<div><span class="label">種別:</span> 終日</div>`
+      : `<div><span class="label">時間:</span> ${ev.startTime} 〜 ${ev.endTime}</div>`;
     modalBody.innerHTML = `
       <div class="modal-detail">
         <div><span class="label">日付:</span> ${ev.date}</div>
-        <div><span class="label">時間:</span> ${ev.startTime} 〜 ${ev.endTime}</div>
-        <div><span class="label">カテゴリ:</span> <span class="category-badge" style="background:${color}">${categoryLabel(ev.category)}</span></div>
+        ${timeRow}
+        ${ev.source !== "holiday" ? `<div><span class="label">カテゴリ:</span> <span class="category-badge" style="background:${color}">${categoryLabel(ev.category)}</span></div>` : ""}
         ${ev.note ? `<div><span class="label">メモ:</span> ${ev.note}</div>` : ""}
         ${readonlyBadge}
       </div>
     `;
-    if (ev.source === "gcal") {
+    if (ev.source === "gcal" || ev.source === "holiday") {
       modalActions.classList.add("hidden");
     } else {
       modalActions.classList.remove("hidden");
@@ -220,13 +184,6 @@
       btn.href = "/api/gcal/auth";
       btn.textContent = "Google カレンダー連携";
       wrapper.appendChild(btn);
-    } else if (gcalEvents.length > 0 || !gcalAuthRequired) {
-      if (gcalEvents.length > 0) {
-        const badge = document.createElement("span");
-        badge.className = "gcal-badge";
-        badge.textContent = `Google (${gcalEvents.length}件)`;
-        wrapper.appendChild(badge);
-      }
     }
 
     navRight.appendChild(wrapper);
@@ -331,15 +288,28 @@
     for (let i = 0; i < 7; i++) {
       const d = days[i];
       const dayIdx = d.getDay();
+      const dateStr = toDateStr(d);
+      const holidayName = getJapaneseHoliday(dateStr);
       let cls = "day-header";
       if (isToday(d)) cls += " today";
-      if (dayIdx === 0) cls += " sun";
+      if (dayIdx === 0 || holidayName) cls += " sun";
       if (dayIdx === 6) cls += " sat";
       const header = document.createElement("div");
       header.className = cls;
-      header.textContent = `${d.getMonth() + 1}/${d.getDate()} (${DAY_NAMES[dayIdx]})`;
+      const label = holidayName
+        ? `${d.getMonth() + 1}/${d.getDate()} (${DAY_NAMES[dayIdx]}) 🎌`
+        : `${d.getMonth() + 1}/${d.getDate()} (${DAY_NAMES[dayIdx]})`;
+      header.textContent = label;
+      if (holidayName) header.title = holidayName;
       grid.appendChild(header);
     }
+
+    // current time line
+    const now = new Date();
+    const todayInWeek = days.some(d => isToday(d));
+    const currentHour = now.getHours();
+    const currentMinutes = now.getMinutes();
+    const timeLineTop = (currentMinutes / 60) * 48;
 
     // pre-compute overlap layouts for each day
     const dayLayouts = days.map(d => {
@@ -419,6 +389,14 @@
           }
         }
 
+        // current time line
+        if (todayInWeek && isToday(d) && h === currentHour) {
+          const line = document.createElement("div");
+          line.className = "current-time-line";
+          line.style.top = timeLineTop + "px";
+          cell.appendChild(line);
+        }
+
         grid.appendChild(cell);
       }
     }
@@ -468,10 +446,16 @@
       cell.className = "month-cell";
       if (d.getMonth() !== month) cell.classList.add("outside");
       if (isToday(d)) cell.classList.add("today");
+      const cellDateStr = toDateStr(d);
+      const cellHoliday = getJapaneseHoliday(cellDateStr);
+      if (cellHoliday) cell.classList.add("holiday-day");
 
       const num = document.createElement("div");
       num.className = "day-number";
+      if (d.getDay() === 0 || cellHoliday) num.classList.add("sun-num");
+      if (d.getDay() === 6) num.classList.add("sat-num");
       num.textContent = d.getDate();
+      if (cellHoliday) num.title = cellHoliday;
       cell.appendChild(num);
 
       // events
@@ -565,8 +549,9 @@
 
   btnEdit.addEventListener("click", () => {
     if (currentDetailEvent) {
+      const ev = currentDetailEvent;
       closeModal();
-      openEditModal(currentDetailEvent);
+      openEditModal(ev);
     }
   });
 
@@ -601,6 +586,21 @@
     applyTheme(next);
     localStorage.setItem("theme", next);
   });
+
+  // ---- Current time line auto-update ----
+  // Renders weekly view immediately when returning to current week, then every 5 minutes
+  function updateTimeLineIfNeeded() {
+    if (currentView !== "weekly") return;
+    const monday = getMonday(currentDate);
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      return d;
+    });
+    if (days.some(d => isToday(d))) renderWeekly();
+  }
+
+  setInterval(updateTimeLineIfNeeded, 5 * 60 * 1000);
 
   // ---- Init ----
   loadSchedule();

@@ -3,3 +3,8 @@ client_secret.json
 token.json
 .code_verifier
 public/
+node_modules/
+.wrangler/
+coverage/
+.claude/
+playwright-report/
