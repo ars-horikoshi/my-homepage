@@ -13,6 +13,7 @@
       <button id="btn-weekly" class="active">週間</button>
       <button id="btn-monthly">月間</button>
       <button id="btn-theme" class="btn-theme" title="ダークモード切替">🌙</button>
+      <button id="btn-logout" class="btn-logout" title="ログアウト">ログアウト</button>
     </div>
   </header>
 
@@ -22,6 +23,7 @@
         <button id="btn-prev">&laquo; 前</button>
         <span id="nav-label"></span>
         <button id="btn-next">次 &raquo;</button>
+        <button id="btn-mail" class="btn-mail" title="本日のメールを確認">📧 メール</button>
         <button id="btn-today">今日</button>
       </div>
       <button id="btn-add" class="btn-add">+ 予定追加</button>
@@ -84,6 +86,15 @@
           <button type="submit" class="btn-action btn-save">保存</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- メールポップアップ -->
+  <div id="mail-overlay" class="modal-overlay hidden">
+    <div class="modal modal-mail">
+      <button class="modal-close" id="mail-close">&times;</button>
+      <h2 id="mail-modal-title">📧 本日のメール</h2>
+      <div id="mail-list"></div>
     </div>
   </div>
 

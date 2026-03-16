@@ -2,9 +2,14 @@
 """静的ファイル配信 + schedule.json REST API サーバー"""
 
 import datetime
+import email as email_lib
+import http.cookies
+import imaplib
 import json
 import os
+import secrets
 import urllib.parse
+from email.header import decode_header
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 try:
@@ -22,10 +27,62 @@ TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
 CODE_VERIFIER_PATH = os.path.join(BASE_DIR, ".code_verifier")
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 REDIRECT_URI = "http://localhost:8000/api/gcal/callback"
+AUTH_REDIRECT_URI = "http://localhost:8000/api/auth/callback"
+AUTH_SCOPES = ["openid", "https://www.googleapis.com/auth/userinfo.email"]
+ALLOWED_EMAIL = "t-horikoshi@ar-system.co.jp"
+AUTH_STATE_PATH = os.path.join(BASE_DIR, ".auth_state")
+AUTH_CODE_VERIFIER_PATH = os.path.join(BASE_DIR, ".auth_code_verifier")
+AUTH_AVAILABLE = GCAL_AVAILABLE and os.path.exists(CLIENT_SECRET_PATH)
+
+# メモリ内セッションストア: token -> True
+_sessions: dict[str, bool] = {}
 
 
 class ScheduleHandler(SimpleHTTPRequestHandler):
+    # ---- Auth helpers ----
+
+    def _get_session_token(self):
+        cookie_header = self.headers.get("Cookie", "")
+        if not cookie_header:
+            return None
+        jar = http.cookies.SimpleCookie()
+        jar.load(cookie_header)
+        morsel = jar.get("session")
+        return morsel.value if morsel else None
+
+    def _is_authenticated(self):
+        if not AUTH_AVAILABLE:
+            return True  # client_secret.json がない場合は認証スキップ
+        token = self._get_session_token()
+        return token is not None and _sessions.get(token, False)
+
+    def _require_auth(self):
+        """未認証なら True を返しレスポンスを送信済み、認証済みなら False を返す"""
+        if self._is_authenticated():
+            return False
+        path = urllib.parse.urlparse(self.path).path
+        if path.startswith("/api/"):
+            self._send_json_error(401, "Unauthorized")
+        else:
+            self.send_response(302)
+            self.send_header("Location", "/login.html")
+            self.end_headers()
+        return True
+
     def do_GET(self):
+        path = urllib.parse.urlparse(self.path).path
+        # ログインページと認証 API は認証不要
+        if path in ("/login", "/login.html", "/api/auth/login", "/api/auth/callback"):
+            if path == "/api/auth/login":
+                self._auth_login()
+            elif path == "/api/auth/callback":
+                self._auth_callback()
+            else:
+                super().do_GET()
+            return
+        if self._require_auth():
+            return
+
         if self.path == "/api/schedule":
             self._send_schedule()
         elif self.path == "/api/gcal/auth":
@@ -34,12 +91,22 @@ class ScheduleHandler(SimpleHTTPRequestHandler):
             self._gcal_callback()
         elif self.path == "/api/gcal":
             self._send_gcal_events()
+        elif self.path == "/api/mail":
+            self._send_mail_list()
         else:
             super().do_GET()
 
     def do_PUT(self):
+        if self._require_auth():
+            return
         if self.path == "/api/schedule":
             self._save_schedule()
+        else:
+            self.send_error(404)
+
+    def do_POST(self):
+        if self.path == "/api/logout":
+            self._handle_logout()
         else:
             self.send_error(404)
 
@@ -68,6 +135,132 @@ class ScheduleHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()
         self.wfile.write(body)
+
+    # ---- Google Auth Login / Logout ----
+
+    def _auth_login(self):
+        if not GCAL_AVAILABLE:
+            self._send_json_error(503, "Google API ライブラリがインストールされていません")
+            return
+        if not os.path.exists(CLIENT_SECRET_PATH):
+            self._send_json_error(503, "client_secret.json が見つかりません")
+            return
+        try:
+            flow = Flow.from_client_secrets_file(
+                CLIENT_SECRET_PATH,
+                scopes=AUTH_SCOPES,
+                redirect_uri=AUTH_REDIRECT_URI,
+            )
+            state = secrets.token_hex(16)
+            auth_url, _ = flow.authorization_url(
+                access_type="online",
+                prompt="select_account",
+                state=state,
+            )
+            with open(AUTH_STATE_PATH, "w") as f:
+                f.write(state)
+            if flow.code_verifier:
+                with open(AUTH_CODE_VERIFIER_PATH, "w") as f:
+                    f.write(flow.code_verifier)
+            self.send_response(302)
+            self.send_header("Location", auth_url)
+            self.end_headers()
+        except Exception as e:
+            self._send_json_error(500, str(e))
+
+    def _auth_callback(self):
+        if not GCAL_AVAILABLE:
+            self._send_html_message("エラー", "<p>Google API ライブラリがインストールされていません</p>")
+            return
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query)
+
+        error = params.get("error")
+        if error:
+            self.send_response(302)
+            self.send_header("Location", "/login.html?error=cancelled")
+            self.end_headers()
+            return
+
+        code_list = params.get("code")
+        state_list = params.get("state")
+        if not code_list or not state_list:
+            self.send_response(302)
+            self.send_header("Location", "/login.html?error=invalid_state")
+            self.end_headers()
+            return
+
+        # state 検証
+        saved_state = ""
+        if os.path.exists(AUTH_STATE_PATH):
+            with open(AUTH_STATE_PATH) as f:
+                saved_state = f.read().strip()
+            os.remove(AUTH_STATE_PATH)
+        if state_list[0] != saved_state:
+            self.send_response(302)
+            self.send_header("Location", "/login.html?error=invalid_state")
+            self.end_headers()
+            return
+
+        try:
+            code_verifier = None
+            if os.path.exists(AUTH_CODE_VERIFIER_PATH):
+                with open(AUTH_CODE_VERIFIER_PATH) as f:
+                    code_verifier = f.read().strip()
+                os.remove(AUTH_CODE_VERIFIER_PATH)
+
+            flow = Flow.from_client_secrets_file(
+                CLIENT_SECRET_PATH,
+                scopes=AUTH_SCOPES,
+                redirect_uri=AUTH_REDIRECT_URI,
+            )
+            if code_verifier:
+                flow.code_verifier = code_verifier
+            flow.fetch_token(code=code_list[0])
+            creds = flow.credentials
+
+            import urllib.request
+            req = urllib.request.Request(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={"Authorization": f"Bearer {creds.token}"},
+            )
+            with urllib.request.urlopen(req) as resp:
+                user_info = json.loads(resp.read())
+
+            if user_info.get("email") != ALLOWED_EMAIL:
+                self.send_response(302)
+                self.send_header("Location", "/login.html?error=unauthorized")
+                self.end_headers()
+                return
+
+            token = secrets.token_hex(32)
+            _sessions[token] = True
+            self.send_response(302)
+            self.send_header("Location", "/")
+            self.send_header(
+                "Set-Cookie",
+                f"session={token}; HttpOnly; SameSite=Lax; Max-Age=604800; Path=/"
+            )
+            self.end_headers()
+        except Exception as e:
+            self.send_response(302)
+            self.send_header("Location", f"/login.html?error=token_failed")
+            self.end_headers()
+
+    def _handle_logout(self):
+        token = self._get_session_token()
+        if token and token in _sessions:
+            del _sessions[token]
+        resp_body = json.dumps({"ok": True}).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(resp_body)))
+        self.send_header(
+            "Set-Cookie",
+            "session=; HttpOnly; SameSite=Strict; Max-Age=0; Path=/"
+        )
+        self.end_headers()
+        self.wfile.write(resp_body)
 
     # ---- Schedule ----
 
@@ -249,6 +442,107 @@ class ScheduleHandler(SimpleHTTPRequestHandler):
                 "note": note,
                 "source": "gcal",
             }]
+
+
+    # ---- Mail ----
+
+    def _send_mail_list(self):
+        host = os.environ.get("MAIL_HOST", "")
+        port = int(os.environ.get("MAIL_PORT", "993"))
+        user = os.environ.get("MAIL_USER", "t-horikoshi@ar-system.co.jp")
+        password = os.environ.get("MAIL_PASSWORD", "")
+
+        if not host or not password:
+            self._send_json_error(
+                503,
+                "メールサーバーが未設定です (MAIL_HOST, MAIL_PASSWORD 環境変数を設定してください)"
+            )
+            return
+
+        try:
+            if port == 993:
+                mail = imaplib.IMAP4_SSL(host, port)
+            else:
+                mail = imaplib.IMAP4(host, port)
+
+            mail.login(user, password)
+            mail.select("INBOX")
+
+            today = datetime.date.today()
+            date_str = today.strftime("%d-%b-%Y")
+            _, nums_data = mail.search(None, f"SINCE {date_str}")
+            msg_nums = nums_data[0].split() if nums_data[0] else []
+            # 最大50件
+            msg_nums = msg_nums[-50:]
+
+            emails = []
+            if msg_nums:
+                num_str = b",".join(msg_nums).decode()
+                _, data = mail.fetch(num_str, "(FLAGS RFC822)")
+                for item in data:
+                    if not isinstance(item, tuple) or len(item) < 2:
+                        continue
+                    meta = item[0].decode("utf-8", errors="replace") if isinstance(item[0], bytes) else ""
+                    raw_bytes = item[1] if isinstance(item[1], bytes) else b""
+                    if not raw_bytes:
+                        continue
+                    is_seen = "\\Seen" in meta
+                    msg = email_lib.message_from_bytes(raw_bytes)
+                    from_addr = _decode_header_str(msg.get("From", ""))
+                    subject = _decode_header_str(msg.get("Subject", ""))
+                    date_header = msg.get("Date", "")
+                    body = _get_mail_body(msg)
+                    emails.append({
+                        "from": from_addr,
+                        "subject": subject,
+                        "date": date_header,
+                        "body": body[:2000],
+                        "unread": not is_seen,
+                    })
+
+            mail.logout()
+            self._send_json({"emails": emails})
+        except Exception as e:
+            self._send_json_error(500, str(e))
+
+
+def _decode_header_str(s):
+    if not s:
+        return ""
+    parts = []
+    for decoded, charset in decode_header(s):
+        if isinstance(decoded, bytes):
+            parts.append(decoded.decode(charset or "utf-8", errors="replace"))
+        else:
+            parts.append(decoded)
+    return "".join(parts)
+
+
+def _get_mail_body(msg):
+    if msg.is_multipart():
+        for part in msg.walk():
+            if (part.get_content_type() == "text/plain"
+                    and part.get_content_disposition() != "attachment"):
+                try:
+                    charset = part.get_content_charset() or "utf-8"
+                    return part.get_payload(decode=True).decode(charset, errors="replace")
+                except Exception:
+                    pass
+        for part in msg.walk():
+            if ("text" in part.get_content_type()
+                    and part.get_content_disposition() != "attachment"):
+                try:
+                    charset = part.get_content_charset() or "utf-8"
+                    return part.get_payload(decode=True).decode(charset, errors="replace")
+                except Exception:
+                    pass
+    else:
+        try:
+            charset = msg.get_content_charset() or "utf-8"
+            return msg.get_payload(decode=True).decode(charset, errors="replace")
+        except Exception:
+            pass
+    return ""
 
 
 if __name__ == "__main__":

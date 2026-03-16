@@ -19,6 +19,11 @@ import { toDateStr, isToday, getMonday, computeDayLayout, calculateHolidaysForYe
   const btnToday = document.getElementById("btn-today");
   const btnAdd = document.getElementById("btn-add");
   const btnGcalReload = document.getElementById("btn-gcal-reload");
+  const btnMail = document.getElementById("btn-mail");
+  const mailOverlay = document.getElementById("mail-overlay");
+  const mailClose = document.getElementById("mail-close");
+  const mailModalTitle = document.getElementById("mail-modal-title");
+  const mailList = document.getElementById("mail-list");
   const navLabel = document.getElementById("nav-label");
   const weeklyView = document.getElementById("weekly-view");
   const monthlyView = document.getElementById("monthly-view");
@@ -495,6 +500,101 @@ import { toDateStr, isToday, getMonday, computeDayLayout, calculateHolidaysForYe
     }
   }
 
+  // ---- Mail ----
+
+  function openMailPopup() {
+    const now = new Date();
+    const dateLabel = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
+    mailModalTitle.textContent = `📧 本日のメール（${dateLabel}）`;
+    mailList.innerHTML = '<div class="mail-loading">読み込み中...</div>';
+    mailOverlay.classList.remove("hidden");
+    fetchMails();
+  }
+
+  function closeMailPopup() {
+    mailOverlay.classList.add("hidden");
+  }
+
+  async function fetchMails() {
+    try {
+      const res = await fetch("/api/mail");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        renderMailError(err.error || "メールの取得に失敗しました");
+        return;
+      }
+      const data = await res.json();
+      renderMailList(data.emails || []);
+    } catch (err) {
+      renderMailError("ネットワークエラー: " + err.message);
+    }
+  }
+
+  function renderMailError(msg) {
+    mailList.innerHTML = `<div class="mail-error">${escapeHtml(msg)}</div>`;
+  }
+
+  function renderMailList(emails) {
+    if (emails.length === 0) {
+      mailList.innerHTML = '<div class="mail-empty">本日のメールはありません</div>';
+      return;
+    }
+    mailList.innerHTML = "";
+    for (const mail of emails) {
+      const item = document.createElement("div");
+      item.className = "mail-item" + (mail.unread ? " mail-unread" : "");
+
+      const timeStr = formatMailTime(mail.date);
+      const unreadBadge = mail.unread
+        ? '<span class="mail-badge mail-badge-unread">未読</span>'
+        : '<span class="mail-badge mail-badge-read">既読</span>';
+
+      item.innerHTML = `
+        <div class="mail-header">
+          <div class="mail-meta">
+            ${unreadBadge}
+            <span class="mail-time">${escapeHtml(timeStr)}</span>
+          </div>
+          <div class="mail-from">${escapeHtml(mail.from || "(差出人不明)")}</div>
+          <div class="mail-subject">${escapeHtml(mail.subject || "(件名なし)")}</div>
+        </div>
+        <div class="mail-body-preview" data-expanded="false">
+          <div class="mail-body-text">${escapeHtml(mail.body || "(本文なし)")}</div>
+          <button class="mail-toggle-btn">本文を表示 ▼</button>
+        </div>
+      `;
+
+      const preview = item.querySelector(".mail-body-preview");
+      const toggleBtn = item.querySelector(".mail-toggle-btn");
+      toggleBtn.addEventListener("click", () => {
+        const expanded = preview.dataset.expanded === "true";
+        preview.dataset.expanded = String(!expanded);
+        toggleBtn.textContent = expanded ? "本文を表示 ▼" : "本文を閉じる ▲";
+      });
+
+      mailList.appendChild(item);
+    }
+  }
+
+  function formatMailTime(dateStr) {
+    if (!dateStr) return "";
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    } catch {
+      return dateStr;
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
   // ---- Event listeners ----
   btnWeekly.addEventListener("click", () => {
     currentView = "weekly";
@@ -533,6 +633,12 @@ import { toDateStr, isToday, getMonday, computeDayLayout, calculateHolidaysForYe
     render();
   });
 
+  btnMail.addEventListener("click", openMailPopup);
+  mailClose.addEventListener("click", closeMailPopup);
+  mailOverlay.addEventListener("click", (e) => {
+    if (e.target === mailOverlay) closeMailPopup();
+  });
+
   modalClose.addEventListener("click", closeModal);
   modalOverlay.addEventListener("click", (e) => {
     if (e.target === modalOverlay) closeModal();
@@ -568,6 +674,13 @@ import { toDateStr, isToday, getMonday, computeDayLayout, calculateHolidaysForYe
   });
 
   editForm.addEventListener("submit", handleFormSubmit);
+
+  // ---- Logout ----
+  const btnLogout = document.getElementById("btn-logout");
+  btnLogout.addEventListener("click", async () => {
+    await fetch("/api/logout", { method: "POST" });
+    window.location.href = "/login";
+  });
 
   // ---- Dark Mode Toggle ----
   const btnTheme = document.getElementById("btn-theme");
