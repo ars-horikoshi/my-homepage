@@ -517,7 +517,15 @@ import { toDateStr, isToday, getMonday, computeDayLayout, calculateHolidaysForYe
 
   async function fetchMails() {
     try {
-      const res = await fetch("/api/mail");
+      const res = await fetch("/api/gmail");
+      if (res.status === 401) {
+        mailList.innerHTML = `
+          <div class="mail-auth-required">
+            <p>Gmail との連携が必要です</p>
+            <a href="/api/gmail/auth" class="btn-gmail-auth">📧 Gmail を認証する</a>
+          </div>`;
+        return;
+      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: res.statusText }));
         renderMailError(err.error || "メールの取得に失敗しました");

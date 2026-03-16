@@ -24,6 +24,10 @@ SCHEDULE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "schedu
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CLIENT_SECRET_PATH = os.path.join(BASE_DIR, "client_secret.json")
 TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
+GMAIL_TOKEN_PATH = os.path.join(BASE_DIR, "gmail_token.json")
+GMAIL_REDIRECT_URI = "http://localhost:8000/api/gmail/callback"
+GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+GMAIL_STATE_PATH = os.path.join(BASE_DIR, ".gmail_state")
 CODE_VERIFIER_PATH = os.path.join(BASE_DIR, ".code_verifier")
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 REDIRECT_URI = "http://localhost:8000/api/gcal/callback"
@@ -93,6 +97,12 @@ class ScheduleHandler(SimpleHTTPRequestHandler):
             self._send_gcal_events()
         elif self.path == "/api/mail":
             self._send_mail_list()
+        elif self.path == "/api/gmail/auth":
+            self._gmail_auth()
+        elif self.path.startswith("/api/gmail/callback"):
+            self._gmail_callback()
+        elif self.path == "/api/gmail":
+            self._send_gmail_messages()
         else:
             super().do_GET()
 
@@ -444,6 +454,117 @@ class ScheduleHandler(SimpleHTTPRequestHandler):
             }]
 
 
+    # ---- Gmail ----
+
+    def _get_gmail_credentials(self):
+        if not GCAL_AVAILABLE:
+            return None
+        if not os.path.exists(GMAIL_TOKEN_PATH):
+            return None
+        try:
+            creds = Credentials.from_authorized_user_file(GMAIL_TOKEN_PATH, GMAIL_SCOPES)
+            if creds and creds.expired and creds.refresh_token:
+                from google.auth.transport.requests import Request
+                creds.refresh(Request())
+                with open(GMAIL_TOKEN_PATH, "w") as f:
+                    f.write(creds.to_json())
+            return creds if creds and creds.valid else None
+        except Exception:
+            return None
+
+    def _gmail_auth(self):
+        if not GCAL_AVAILABLE:
+            self._send_json_error(503, "Google API ライブラリがインストールされていません")
+            return
+        if not os.path.exists(CLIENT_SECRET_PATH):
+            self._send_json_error(503, "client_secret.json が見つかりません")
+            return
+        try:
+            flow = Flow.from_client_secrets_file(
+                CLIENT_SECRET_PATH,
+                scopes=GMAIL_SCOPES,
+                redirect_uri=GMAIL_REDIRECT_URI,
+            )
+            state = secrets.token_hex(16)
+            auth_url, _ = flow.authorization_url(
+                access_type="offline",
+                prompt="consent",
+                state=state,
+            )
+            with open(GMAIL_STATE_PATH, "w") as f:
+                f.write(state)
+            self.send_response(302)
+            self.send_header("Location", auth_url)
+            self.end_headers()
+        except Exception as e:
+            self._send_json_error(500, str(e))
+
+    def _gmail_callback(self):
+        if not GCAL_AVAILABLE:
+            self._send_html_message("エラー", "<p>Google API ライブラリがインストールされていません</p>")
+            return
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query)
+        code_list = params.get("code")
+        if not code_list:
+            self._send_html_message("エラー", "<p>認証コードが見つかりません</p>")
+            return
+        try:
+            flow = Flow.from_client_secrets_file(
+                CLIENT_SECRET_PATH,
+                scopes=GMAIL_SCOPES,
+                redirect_uri=GMAIL_REDIRECT_URI,
+            )
+            flow.fetch_token(code=code_list[0])
+            with open(GMAIL_TOKEN_PATH, "w") as f:
+                f.write(flow.credentials.to_json())
+            self.send_response(302)
+            self.send_header("Location", "/")
+            self.end_headers()
+        except Exception as e:
+            self._send_html_message("エラー", f"<p>認証に失敗しました: {e}</p>")
+
+    def _send_gmail_messages(self):
+        if not GCAL_AVAILABLE:
+            self._send_json_error(503, "Google API ライブラリがインストールされていません")
+            return
+        creds = self._get_gmail_credentials()
+        if creds is None:
+            self._send_json_error(401, "認証が必要です")
+            return
+        try:
+            import urllib.request as ureq
+            today = datetime.date.today()
+            date_query = today.strftime("%Y/%m/%d")
+            token = creds.token
+
+            # メッセージ一覧取得
+            list_url = (
+                f"https://gmail.googleapis.com/gmail/v1/users/me/messages"
+                f"?q=after:{date_query}&maxResults=50"
+            )
+            req = ureq.Request(list_url, headers={"Authorization": f"Bearer {token}"})
+            with ureq.urlopen(req) as resp:
+                list_data = json.loads(resp.read())
+
+            messages = list_data.get("messages", [])
+            emails = []
+            for msg_ref in messages:
+                msg_id = msg_ref["id"]
+                msg_url = (
+                    f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_id}"
+                    f"?format=full"
+                )
+                req2 = ureq.Request(msg_url, headers={"Authorization": f"Bearer {token}"})
+                with ureq.urlopen(req2) as resp2:
+                    msg = json.loads(resp2.read())
+                emails.append(_parse_gmail_message(msg))
+
+            emails.sort(key=lambda e: e.get("date", ""))
+            self._send_json({"emails": emails})
+        except Exception as e:
+            self._send_json_error(500, str(e))
+
     # ---- Mail ----
 
     def _send_mail_list(self):
@@ -504,6 +625,71 @@ class ScheduleHandler(SimpleHTTPRequestHandler):
             self._send_json({"emails": emails})
         except Exception as e:
             self._send_json_error(500, str(e))
+
+
+def _parse_gmail_message(msg):
+    headers = msg.get("payload", {}).get("headers", [])
+    def get_header(name):
+        return next((h["value"] for h in headers if h["name"].lower() == name.lower()), "")
+    return {
+        "id": msg.get("id", ""),
+        "from": get_header("From"),
+        "subject": get_header("Subject"),
+        "date": get_header("Date"),
+        "body": _extract_gmail_body(msg.get("payload", {}))[:2000],
+        "unread": "UNREAD" in msg.get("labelIds", []),
+    }
+
+
+def _extract_gmail_body(payload):
+    import base64
+    mime = payload.get("mimeType", "")
+    body_data = payload.get("body", {}).get("data", "")
+
+    if body_data:
+        try:
+            text = base64.urlsafe_b64decode(body_data + "==").decode("utf-8", errors="replace")
+            if mime == "text/plain":
+                return text
+            if mime == "text/html":
+                return _strip_html(text)
+        except Exception:
+            pass
+
+    parts = payload.get("parts", [])
+    for part in parts:
+        if part.get("mimeType") == "text/plain":
+            data = part.get("body", {}).get("data", "")
+            if data:
+                try:
+                    return base64.urlsafe_b64decode(data + "==").decode("utf-8", errors="replace")
+                except Exception:
+                    pass
+    for part in parts:
+        if part.get("mimeType") == "text/html":
+            data = part.get("body", {}).get("data", "")
+            if data:
+                try:
+                    return _strip_html(base64.urlsafe_b64decode(data + "==").decode("utf-8", errors="replace"))
+                except Exception:
+                    pass
+    for part in parts:
+        if part.get("mimeType", "").startswith("multipart/"):
+            text = _extract_gmail_body(part)
+            if text:
+                return text
+    return ""
+
+
+def _strip_html(html):
+    import re
+    html = re.sub(r"<style[^>]*>.*?</style>", "", html, flags=re.DOTALL | re.IGNORECASE)
+    html = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
+    html = re.sub(r"<[^>]+>", " ", html)
+    html = html.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&").replace("&nbsp;", " ")
+    html = re.sub(r" +", " ", html)
+    html = re.sub(r"\n{3,}", "\n\n", html)
+    return html.strip()
 
 
 def _decode_header_str(s):
