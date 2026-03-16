@@ -46,7 +46,7 @@ export async function onRequestGet({ env }) {
     const dateQuery = `${today.getFullYear()}/${today.getMonth() + 1}/${today.getDate()}`;
 
     const listRes = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:${dateQuery}&maxResults=50`,
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=in:inbox+after:${dateQuery}&maxResults=50`,
       { headers: { Authorization: `Bearer ${tokens.access_token}` } }
     );
 

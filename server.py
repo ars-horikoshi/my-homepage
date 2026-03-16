@@ -541,7 +541,7 @@ class ScheduleHandler(SimpleHTTPRequestHandler):
             # メッセージ一覧取得
             list_url = (
                 f"https://gmail.googleapis.com/gmail/v1/users/me/messages"
-                f"?q=after:{date_query}&maxResults=50"
+                f"?q=in:inbox+after:{date_query}&maxResults=50"
             )
             req = ureq.Request(list_url, headers={"Authorization": f"Bearer {token}"})
             with ureq.urlopen(req) as resp:
