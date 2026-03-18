@@ -181,6 +181,7 @@ header h1 {
   font-weight: bold;
   min-width: 180px;
   text-align: center;
+  white-space: nowrap;
 }
 
 /* ---- Nav Actions Row ---- */
