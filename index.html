@@ -24,12 +24,17 @@
         <span id="nav-label"></span>
         <button id="btn-next">次 &raquo;</button>
         <button id="btn-today">今日</button>
-        <button id="btn-mail" class="btn-mail" title="本日のメールを確認">📧 メール</button>
+        <button id="btn-jump-date" class="btn-jump-date" title="日付を指定して移動">日付指定</button>
+        <input type="date" id="input-jump-date" class="input-jump-date" title="日付を指定して移動">
+        <button id="btn-mail" class="btn-mail" title="本日のメールを確認">📧 メール<span id="mail-count-badge" class="mail-count-badge hidden"></span></button>
       </div>
-      <button id="btn-add" class="btn-add">+ 予定追加</button>
-      <button id="btn-gcal-reload" class="btn-gcal-reload" title="Google カレンダーをリロード">&#x21bb; Google Reload</button>
       <div class="nav-right"></div>
     </nav>
+
+    <div class="nav-actions">
+      <button id="btn-add" class="btn-add">+ 予定追加</button>
+      <button id="btn-gcal-reload" class="btn-gcal-reload" title="Google カレンダーをリロード">&#x21bb; Google Reload</button>
+    </div>
 
     <div class="legend" id="legend"></div>
 

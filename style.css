@@ -161,7 +161,7 @@ header h1 {
   flex: 1;
 }
 
-.nav-bar button:not(.btn-add):not(.btn-gcal-reload) {
+.nav-bar button {
   padding: 6px 14px;
   border: 1px solid var(--nav-btn-border);
   background: var(--nav-btn-bg);
@@ -171,7 +171,7 @@ header h1 {
   font-size: 0.85rem;
 }
 
-.nav-bar button:not(.btn-add):not(.btn-gcal-reload):hover {
+.nav-bar button:hover {
   background: var(--nav-btn-hover);
 }
 
@@ -180,6 +180,14 @@ header h1 {
   font-weight: bold;
   min-width: 180px;
   text-align: center;
+}
+
+/* ---- Nav Actions Row ---- */
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 24px 12px;
 }
 
 /* ---- Legend ---- */
@@ -511,8 +519,23 @@ header h1 {
   cursor: not-allowed;
 }
 
+/* ---- Jump to Date Input ---- */
+.input-jump-date {
+  display: none;
+}
+
+.btn-jump-date {
+  padding: 5px 10px;
+}
+
+.input-jump-date:focus {
+  outline: none;
+  border-color: #5aa0d6;
+}
+
 /* ---- Mail Button ---- */
 .btn-mail {
+  position: relative;
   padding: 6px 14px;
   background: #e8f4ff;
   color: #1a6fb5;
@@ -522,6 +545,29 @@ header h1 {
   font-size: 0.85rem;
   font-weight: bold;
   transition: background 0.2s;
+}
+
+.mail-count-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  background: #e74c3c;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: bold;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.mail-count-badge.hidden {
+  display: none;
 }
 
 .btn-mail:hover {
@@ -862,6 +908,12 @@ header h1 {
   background: #2a6fd6;
 }
 
+.gcal-error-msg {
+  font-size: 0.8rem;
+  color: #e74c3c;
+  padding: 4px 8px;
+}
+
 .gcal-badge {
   display: inline-block;
   padding: 4px 10px;
@@ -941,6 +993,10 @@ header h1 {
     min-width: 140px;
   }
 
+  .nav-actions {
+    padding: 0 12px 8px;
+  }
+
   .btn-add,
   .btn-gcal-reload {
     flex: 1;
@@ -1017,9 +1073,13 @@ header h1 {
     gap: 4px;
   }
 
-  .nav-bar button:not(.btn-add):not(.btn-gcal-reload) {
+  .nav-bar button {
     padding: 6px 10px;
     font-size: 0.8rem;
+  }
+
+  .nav-actions {
+    padding: 0 8px 8px;
   }
 
   #nav-label {
