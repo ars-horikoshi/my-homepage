@@ -76,6 +76,14 @@ body {
   min-height: 100vh;
 }
 
+/* ---- Sticky Top Wrapper ---- */
+#sticky-top {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--bg-body);
+}
+
 /* ---- Header ---- */
 header {
   background: var(--header-bg);
@@ -233,16 +241,22 @@ header h1 {
   border: 1px solid var(--grid-border);
   border-radius: 6px;
   background: var(--grid-bg);
-  overflow: hidden;
+  overflow: clip;
 }
 
 .weekly-grid .corner {
+  position: sticky;
+  top: var(--sticky-top-h, 0);
+  z-index: 10;
   background: var(--header-cell-bg);
   border-bottom: 1px solid var(--grid-border);
   border-right: 1px solid var(--grid-border);
 }
 
 .weekly-grid .day-header {
+  position: sticky;
+  top: var(--sticky-top-h, 0);
+  z-index: 10;
   text-align: center;
   padding: 10px 4px;
   font-size: 0.8rem;
@@ -361,10 +375,13 @@ header h1 {
   border: 1px solid var(--grid-border);
   border-radius: 6px;
   background: var(--grid-bg);
-  overflow: hidden;
+  overflow: clip;
 }
 
 .monthly-grid .month-day-header {
+  position: sticky;
+  top: var(--sticky-top-h, 0);
+  z-index: 10;
   text-align: center;
   padding: 8px 4px;
   font-size: 0.8rem;

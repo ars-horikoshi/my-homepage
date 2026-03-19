@@ -512,6 +512,7 @@ import { toDateStr, isToday, getMonday, computeDayLayout, calculateHolidaysForYe
       monthlyView.classList.remove("hidden");
       renderMonthly();
     }
+    requestAnimationFrame(updateStickyTopHeight);
   }
 
   // ---- Mail ----
@@ -765,6 +766,14 @@ import { toDateStr, isToday, getMonday, computeDayLayout, calculateHolidaysForYe
   }
 
   setInterval(updateTimeLineIfNeeded, 5 * 60 * 1000);
+
+  // ---- Sticky header height ----
+  const stickyTop = document.getElementById("sticky-top");
+  function updateStickyTopHeight() {
+    document.documentElement.style.setProperty("--sticky-top-h", stickyTop.offsetHeight + "px");
+  }
+  updateStickyTopHeight();
+  window.addEventListener("resize", updateStickyTopHeight);
 
   // ---- Mail count badge (initial fetch + 5-min auto-refresh) ----
   updateMailCountBadge();

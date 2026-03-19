@@ -7,17 +7,17 @@
   <link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
-  <header>
-    <h1>スケジュール表</h1>
-    <div class="view-toggle">
-      <button id="btn-weekly" class="active">週間</button>
-      <button id="btn-monthly">月間</button>
-      <button id="btn-theme" class="btn-theme" title="ダークモード切替">🌙</button>
-      <button id="btn-logout" class="btn-logout" title="ログアウト">ログアウト</button>
-    </div>
-  </header>
+  <div id="sticky-top">
+    <header>
+      <h1>スケジュール表</h1>
+      <div class="view-toggle">
+        <button id="btn-weekly" class="active">週間</button>
+        <button id="btn-monthly">月間</button>
+        <button id="btn-theme" class="btn-theme" title="ダークモード切替">🌙</button>
+        <button id="btn-logout" class="btn-logout" title="ログアウト">ログアウト</button>
+      </div>
+    </header>
 
-  <main>
     <nav class="nav-bar">
       <div class="nav-left">
         <button id="btn-prev">&laquo; 前</button>
@@ -37,7 +37,9 @@
     </div>
 
     <div class="legend" id="legend"></div>
+  </div>
 
+  <main>
     <section id="weekly-view" class="view"></section>
     <section id="monthly-view" class="view hidden"></section>
   </main>
