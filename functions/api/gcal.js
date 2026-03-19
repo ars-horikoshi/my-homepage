@@ -91,14 +91,14 @@ export async function onRequestGet({ env }) {
 
   try {
     const now = Date.now();
-    const timeMin = new Date(now - 90 * 86400_000).toISOString();
-    const timeMax = new Date(now + 90 * 86400_000).toISOString();
+    const timeMin = new Date(now - 30 * 86400_000).toISOString();
+    const timeMax = new Date(now + 730 * 86400_000).toISOString();
     const params = new URLSearchParams({
       timeMin,
       timeMax,
       singleEvents: "true",
       orderBy: "startTime",
-      maxResults: "500",
+      maxResults: "2500",
     });
 
     const res = await fetch(

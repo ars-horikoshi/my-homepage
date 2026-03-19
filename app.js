@@ -7,6 +7,7 @@ import { toDateStr, isToday, getMonday, computeDayLayout, calculateHolidaysForYe
   let scheduleData = { events: [], categories: {} };
   let gcalEvents = [];
   let gcalAuthRequired = false;
+  let gcalError = null;
   let currentView = "weekly"; // "weekly" | "monthly"
   let currentDate = new Date(); // reference date for navigation
   let currentDetailEvent = null; // event shown in detail modal
@@ -19,7 +20,10 @@ import { toDateStr, isToday, getMonday, computeDayLayout, calculateHolidaysForYe
   const btnToday = document.getElementById("btn-today");
   const btnAdd = document.getElementById("btn-add");
   const btnGcalReload = document.getElementById("btn-gcal-reload");
+  const btnJumpDate = document.getElementById("btn-jump-date");
+  const inputJumpDate = document.getElementById("input-jump-date");
   const btnMail = document.getElementById("btn-mail");
+  const mailCountBadge = document.getElementById("mail-count-badge");
   const mailOverlay = document.getElementById("mail-overlay");
   const mailClose = document.getElementById("mail-close");
   const mailModalTitle = document.getElementById("mail-modal-title");
@@ -108,14 +112,19 @@ import { toDateStr, isToday, getMonday, computeDayLayout, calculateHolidaysForYe
       if (res.status === 401) {
         gcalAuthRequired = true;
         gcalEvents = [];
+        gcalError = null;
       } else if (res.ok) {
         const data = await res.json();
         gcalAuthRequired = false;
         gcalEvents = data.events || [];
+        gcalError = null;
       } else {
+        const errData = await res.json().catch(() => ({}));
+        gcalError = errData.error || `GCalエラー (${res.status})`;
         gcalEvents = [];
       }
-    } catch {
+    } catch (e) {
+      gcalError = "GCal接続エラー: " + e.message;
       gcalEvents = [];
     }
     updateGcalUI();
@@ -189,6 +198,11 @@ import { toDateStr, isToday, getMonday, computeDayLayout, calculateHolidaysForYe
       btn.href = "/api/gcal/auth";
       btn.textContent = "Google カレンダー連携";
       wrapper.appendChild(btn);
+    } else if (gcalError) {
+      const msg = document.createElement("span");
+      msg.className = "gcal-error-msg";
+      msg.textContent = gcalError;
+      wrapper.appendChild(msg);
     }
 
     navRight.appendChild(wrapper);
@@ -502,7 +516,25 @@ import { toDateStr, isToday, getMonday, computeDayLayout, calculateHolidaysForYe
 
   // ---- Mail ----
 
-  function openMailPopup() {
+  async function updateMailCountBadge() {
+    try {
+      const res = await fetch("/api/gmail");
+      if (!res.ok) return;
+      const data = await res.json();
+      const unread = (data.emails || []).filter(m => m.unread).length;
+      if (unread > 0) {
+        mailCountBadge.textContent = unread > 99 ? "99+" : String(unread);
+        mailCountBadge.classList.remove("hidden");
+      } else {
+        mailCountBadge.classList.add("hidden");
+      }
+    } catch {
+      // silently ignore network errors for background count fetch
+    }
+  }
+
+  async function openMailPopup() {
+    await updateMailCountBadge();
     const now = new Date();
     const dateLabel = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
     mailModalTitle.textContent = `📧 本日のメール（${dateLabel}）`;
@@ -622,7 +654,7 @@ import { toDateStr, isToday, getMonday, computeDayLayout, calculateHolidaysForYe
     if (currentView === "weekly") {
       currentDate.setDate(currentDate.getDate() - 7);
     } else {
-      currentDate.setMonth(currentDate.getMonth() - 1);
+      currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
     }
     render();
   });
@@ -631,13 +663,24 @@ import { toDateStr, isToday, getMonday, computeDayLayout, calculateHolidaysForYe
     if (currentView === "weekly") {
       currentDate.setDate(currentDate.getDate() + 7);
     } else {
-      currentDate.setMonth(currentDate.getMonth() + 1);
+      currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
     }
     render();
   });
 
   btnToday.addEventListener("click", () => {
     currentDate = new Date();
+    render();
+  });
+
+  btnJumpDate.addEventListener("click", () => {
+    try { inputJumpDate.showPicker(); } catch { inputJumpDate.click(); }
+  });
+
+  inputJumpDate.addEventListener("change", () => {
+    if (!inputJumpDate.value) return;
+    currentDate = new Date(inputJumpDate.value + "T00:00:00");
+    inputJumpDate.value = "";
     render();
   });
 
@@ -722,6 +765,10 @@ import { toDateStr, isToday, getMonday, computeDayLayout, calculateHolidaysForYe
   }
 
   setInterval(updateTimeLineIfNeeded, 5 * 60 * 1000);
+
+  // ---- Mail count badge (initial fetch + 5-min auto-refresh) ----
+  updateMailCountBadge();
+  setInterval(updateMailCountBadge, 5 * 60 * 1000);
 
   // ---- Init ----
   loadSchedule();
