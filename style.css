@@ -69,19 +69,25 @@
   --input-text: #e0e0e0;
 }
 
+html {
+  height: 100%;
+}
+
 body {
   font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
   background: var(--bg-body);
   color: var(--text-main);
-  min-height: 100vh;
+  height: 100%;
+  overflow: hidden;
 }
 
 /* ---- Sticky Top Wrapper ---- */
 #sticky-top {
-  position: sticky;
-  top: 0;
-  z-index: 100;
   background: var(--bg-body);
+}
+
+main {
+  height: calc(100vh - var(--sticky-top-h, 180px));
 }
 
 /* ---- Header ---- */
@@ -230,8 +236,10 @@ header h1 {
    Weekly View
    ======================================== */
 #weekly-view {
-  overflow-x: auto;
-  margin: 0 24px 24px;
+  overflow: auto;
+  height: 100%;
+  padding: 0 24px 24px;
+  box-sizing: border-box;
 }
 
 .weekly-grid {
@@ -246,7 +254,7 @@ header h1 {
 
 .weekly-grid .corner {
   position: sticky;
-  top: var(--sticky-top-h, 0);
+  top: 0;
   z-index: 10;
   background: var(--header-cell-bg);
   border-bottom: 1px solid var(--grid-border);
@@ -255,7 +263,7 @@ header h1 {
 
 .weekly-grid .day-header {
   position: sticky;
-  top: var(--sticky-top-h, 0);
+  top: 0;
   z-index: 10;
   text-align: center;
   padding: 10px 4px;
@@ -364,8 +372,10 @@ header h1 {
    Monthly View
    ======================================== */
 #monthly-view {
-  overflow-x: auto;
-  margin: 0 24px 24px;
+  overflow: auto;
+  height: 100%;
+  padding: 0 24px 24px;
+  box-sizing: border-box;
 }
 
 .monthly-grid {
@@ -380,7 +390,7 @@ header h1 {
 
 .monthly-grid .month-day-header {
   position: sticky;
-  top: var(--sticky-top-h, 0);
+  top: 0;
   z-index: 10;
   text-align: center;
   padding: 8px 4px;
@@ -1020,7 +1030,7 @@ header h1 {
 
 
   #weekly-view {
-    margin: 0 8px 16px;
+    padding: 0 8px 16px;
   }
 
   .weekly-grid {
@@ -1041,7 +1051,7 @@ header h1 {
   }
 
   #monthly-view {
-    margin: 0 8px 16px;
+    padding: 0 8px 16px;
   }
 
   .monthly-grid .month-cell {
